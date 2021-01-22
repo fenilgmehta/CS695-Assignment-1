@@ -33,3 +33,6 @@ clean:
 	$(RM) kvm-hello-world kvm-hello-world.o payload.o guest16.o \
 		guest32.o guest32.img guest32.img.o \
 		guest64.o guest64.img guest64.img.o
+
+all: kvm-hello-world.o payload.o
+	$(CC) $^ -o kvm-hello-world
