@@ -9,6 +9,9 @@
 #include <stdint.h>
 #include <linux/kvm.h>
 
+// REFER: https://stackoverflow.com/questions/52240592/what-exatly-are-char16-t-and-char32-t-and-where-can-i-find-them
+#include <uchar.h>
+
 /* CR0 bits */
 #define CR0_PE 1u
 #define CR0_MP (1U << 1)
@@ -174,9 +177,11 @@ int run_vm(struct vm *vm, struct vcpu *vcpu, size_t sz) {
     uint64_t memval = 0;
 
     printfdebug("Port number used for IO = %d (i.e. 0x%X)\n", 0xE9, 0xE9);
-    // NOTE: the below variable keeps the count of
-    static uint64_t exit_count = 0, io_count = 0;  // DEBUG
-    static uint16_t flag = 1;
+    // NOTE: the below variable keeps the count of:
+    //           1. total exits from guest to VMM
+    //           2. exits from guest to VMM due to IO
+    static uint64_t exit_count = 0, io_count = 0;
+    // static uint16_t flag = 1;
     for (;;) {
         // REFER: https://lwn.net/Articles/658512/
         // NOTE: Note that KVM_RUN runs the VM in the context of the current thread and doesn't return until emulation
@@ -198,23 +203,44 @@ int run_vm(struct vm *vm, struct vcpu *vcpu, size_t sz) {
 
             case KVM_EXIT_IO:
                 io_count += 1;
-                if (vcpu->kvm_run->io.direction == KVM_EXIT_IO_OUT
-                    && vcpu->kvm_run->io.port == 0xE9) {
-                    char *p = (char *) vcpu->kvm_run;
-                    if(flag == 1) {
-                        flag = 0;
-                        printfdebug("Part A: (char *) vcpu->kvm_run = p = %p\n", p);
-                    }
-                    fwrite(p + vcpu->kvm_run->io.data_offset,
-                           vcpu->kvm_run->io.size, 1, stdout);
-                    fflush(stdout);
-                    continue;
-                }
+                char *p = (char *) vcpu->kvm_run;
+                char *port_data_ptr = p + vcpu->kvm_run->io.data_offset;
 
-                /* fall through */
+                if (vcpu->kvm_run->io.direction == KVM_EXIT_IO_OUT) {
+                    // printfdebug("DELETE THIS LINE: reason is KVM_EXIT_IO_OUT, port = %d\n", vcpu->kvm_run->io.port);
+                    // printfdebug("Part A: (char *) vcpu->kvm_run = p = %p\n", p);
+                    // printfdebug("            p + vcpu->kvm_run->io.data_offset = %p\n", p + vcpu->kvm_run->io.data_offset);
+                    // printfdebug("            vcpu->kvm_run->io.data_offset = %llu\n", vcpu->kvm_run->io.data_offset);  // always remain 4096
+
+                    if (vcpu->kvm_run->io.port == 233) {
+                        // PORT NUMBER:   0xE9 = 233 = print uint32_t as char32_t
+                        // fwrite(p + vcpu->kvm_run->io.data_offset, vcpu->kvm_run->io.size, 1, stdout);
+                        fprintf(stdout, "%c", ((char32_t *) port_data_ptr)[0]);
+                        fflush(stdout);
+                    } else if (vcpu->kvm_run->io.port == 235) {
+                        // PORT NUMBER:   0xEB = 235 = print uint32_t as integer
+                        fprintf(stdout, "printVal value = %d\n", ((uint32_t *) port_data_ptr)[0]);
+                        fflush(stdout);
+                    } else if (vcpu->kvm_run->io.port == 237) {
+                        // PORT NUMBER:   0xED = 237 = print uint32_t as char* which is a null terminated string
+                        fprintf(stdout, "%s", vm->mem + ((uint32_t *) port_data_ptr)[0]);
+                        fflush(stdout);
+                    } else {
+                        printfdebug("UNEXPECTED KVM_EXIT_IO_OUT vcpu->kvm_run->io.port = %d", vcpu->kvm_run->io.port);
+                    }
+                } else if (vcpu->kvm_run->io.direction == KVM_EXIT_IO_IN) {
+                    // printfdebug("DELETE THIS LINE: reason is KVM_EXIT_IO_IN, port = %d\n", vcpu->kvm_run->io.port);
+                    if (vcpu->kvm_run->io.port == 235) {
+                        ((uint32_t *) port_data_ptr)[0] = exit_count;
+                    } else {
+                        printfdebug("UNEXPECTED KVM_EXIT_IO_IN vcpu->kvm_run->io.port = %d", vcpu->kvm_run->io.port);
+                    }
+                }
+                continue;
+
+            /* fall through */
             default:
-                fprintf(stderr, "Got exit_reason %d,"
-                                " expected KVM_EXIT_HLT (%d)\n",
+                fprintf(stderr, "Got exit_reason %d, expected KVM_EXIT_HLT (%d)\n",
                         vcpu->kvm_run->exit_reason, KVM_EXIT_HLT);
                 exit(1);
         }
@@ -223,7 +249,7 @@ int run_vm(struct vm *vm, struct vcpu *vcpu, size_t sz) {
     check:
     printfdebug("Part A: exit_count = %lu\n", exit_count);
     printfdebug("Part A: io_count = %lu\n", io_count);
-    printfdebug("            This is 14 because 'Hello, world!' is of length 13 and '\\n' is of length 1\n");
+    printfdebug("            14 IO exits are because of 'Hello, world!' which is of length 13 and '\\n' which is of length 1\n");
     if (ioctl(vcpu->fd, KVM_GET_REGS, &regs) < 0) {
         perror("KVM_GET_REGS");
         exit(1);

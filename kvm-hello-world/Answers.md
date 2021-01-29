@@ -8,6 +8,7 @@
     - https://en.wikibooks.org/wiki/X86_Assembly/X86_Architecture
     - https://en.wikipedia.org/wiki/Control_register
     - https://lwn.net/Articles/658511/
+    - https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
 
 ---
 
@@ -54,7 +55,7 @@ What is the size of the guest memory (that the guest perceives as its physical m
     - Refer: `NOTE: Part A: the below statement switch the control from running the hypervisor to running the guest`
 
 - Q7: Can you fully understand how the "Hello, world!" string is printed out by the guest via the hypervisor? What port number is used for this communication? How can you read the port number and the value written to the port within the hypervisor? Which memory buffer is used to communicate the value written by the guest to the hypervisor? How many exits (from guest to hypervisor) are required to print out the complete string?
-    - The [`guest.c`](./guest.c) file uses a `for loop` (at line 14) to print each character on the port `0xE9` which causes exit to the hypervisor.
+    - The [guest.c](./guest.c) file uses a `for loop` (at line 14) to print each character on the port `0xE9` which causes exit to the hypervisor.
     - The value written to the port is read using `((char *) vcpu->kvm_run) + vcpu->kvm_run->io.data_offset` and the length is known using `vcpu->kvm_run->io.size`
     - The memory allocated in `vcpu_init` is used as a buffer to communicate the value written by the guest to the hypervisor.
         - Refer: `Part A: VCPU runtime memory location in virutal address space of the hypervisor`
@@ -66,7 +67,7 @@ What is the size of the guest memory (that the guest perceives as its physical m
 ---
 
 ### Part B
-- two
+- Completely solved in the code ([kvm-hello-world.c](./kvm-hello-world.c), [guest.c](./guest.c))
 
 ---
 
