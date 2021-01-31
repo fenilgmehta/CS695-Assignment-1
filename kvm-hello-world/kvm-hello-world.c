@@ -172,6 +172,103 @@ void vcpu_init(struct vm *vm, struct vcpu *vcpu) {
     }
 }
 
+// REFER: "const uint32_t FILE_IO_PORT=239;" in guest.c
+const uint32_t FILE_IO_PORT = 239;
+
+enum FileSystemOperationType {
+    ENUM_FILE_OPEN_ADV = 1, ENUM_FILE_OPEN = 3, ENUM_FILE_CLOSE = 5, ENUM_FILE_READ = 7, ENUM_FILE_WRITE = 9,
+    ENUM_FILE_LSEEK = 11
+};
+
+struct FileSystemOperation {
+    enum FileSystemOperationType operation_type;
+
+    const char *param_path;
+    int param_flags;
+    mode_t param_mode;  // This is an integer
+    int param_fd;
+    void *param_buf;
+    size_t param_cnt;
+    off_t param_offset;
+
+    int return_result_int;
+    size_t return_result_size_t;
+    off_t return_result_off_t;
+};
+
+void handle_kvm_exit_io_out(struct vm *vm, struct vcpu *vcpu, char *port_data_ptr) {
+    // printfdebug("DELETE THIS LINE: reason is KVM_EXIT_IO_OUT, port = %d\n", vcpu->kvm_run->io.port);
+    // printfdebug("Part A: (char *) vcpu->kvm_run = p = %p\n", p);
+    // printfdebug("            p + vcpu->kvm_run->io.data_offset = %p\n", p + vcpu->kvm_run->io.data_offset);
+    // printfdebug("            vcpu->kvm_run->io.data_offset = %llu\n", vcpu->kvm_run->io.data_offset);  // always remain 4096
+
+    if (vcpu->kvm_run->io.port == 233) {
+        // PORT NUMBER:   0xE9 = 233 = print uint32_t as char32_t
+        // fwrite(p + vcpu->kvm_run->io.data_offset, vcpu->kvm_run->io.size, 1, stdout);
+        fprintf(stdout, "%c", ((char32_t *) port_data_ptr)[0]);
+        fflush(stdout);
+    } else if (vcpu->kvm_run->io.port == 235) {
+        // PORT NUMBER:   0xEB = 235 = print uint32_t as integer
+        fprintf(stdout, "printVal value = %d\n", ((uint32_t *) port_data_ptr)[0]);
+        fflush(stdout);
+    } else if (vcpu->kvm_run->io.port == 237) {
+        // PORT NUMBER:   0xED = 237 = print uint32_t as char* which is a null terminated string
+        fprintf(stdout, "%s", vm->mem + ((uint32_t *) port_data_ptr)[0]);
+        fflush(stdout);
+    } else if (vcpu->kvm_run->io.port == FILE_IO_PORT) {
+        // NOTE: the data is stored in a local variable so that if any other thread
+        //       sends any data, then the previously sent data is not overwritten
+        // NOTE: "port_data_ptr" is the Physical Address of the Guest VM which points
+        //       to Physical Address of the "struct FileSystemOperation" object
+        struct FileSystemOperation *fsoPtr = (struct FileSystemOperation *) (
+                vm->mem + ((uint32_t *) port_data_ptr)[0]
+        );
+        switch (fsoPtr->operation_type) {
+            case ENUM_FILE_OPEN_ADV:
+                // NOTE: below "vm->mem + (intptr_t) fsoPtr->param_path" we do addition to "vm->mem"
+                //       because "fsoPtr->param_path" is Physical Address of the Guest VM
+                fsoPtr->return_result_int = open(vm->mem + (intptr_t) fsoPtr->param_path,
+                                                 fsoPtr->param_flags,
+                                                 fsoPtr->param_mode);
+                printfdebug("ENUM_FILE_OPEN_ADV path = %s\n", vm->mem + (intptr_t) fsoPtr->param_path);
+                printfdebug("ENUM_FILE_OPEN_ADV fsoPtr->return_result_int = %d\n", fsoPtr->return_result_int);
+                break;
+            case ENUM_FILE_OPEN:
+                fsoPtr->return_result_int = open(vm->mem + (intptr_t) fsoPtr->param_path, fsoPtr->param_flags);
+                break;
+            case ENUM_FILE_CLOSE:
+                fsoPtr->return_result_int = close(fsoPtr->param_fd);
+                break;
+            case ENUM_FILE_READ:
+                fsoPtr->return_result_size_t = read(fsoPtr->param_fd,
+                                                    (void *) (vm->mem + (intptr_t) fsoPtr->param_buf),
+                                                    fsoPtr->param_cnt);
+                break;
+            case ENUM_FILE_WRITE:
+                fsoPtr->return_result_size_t = write(fsoPtr->param_fd,
+                                                     (void *) (vm->mem + (intptr_t) fsoPtr->param_buf),
+                                                     fsoPtr->param_cnt);
+                break;
+            case ENUM_FILE_LSEEK:
+                fsoPtr->return_result_off_t = lseek(fsoPtr->param_fd, fsoPtr->param_offset, fsoPtr->param_flags);
+                break;
+            default:
+                printfdebug("INVALID fso->operation_type = %d\n", fsoPtr->operation_type);
+        }
+    } else {
+        printfdebug("UNEXPECTED KVM_EXIT_IO_OUT vcpu->kvm_run->io.port = %d", vcpu->kvm_run->io.port);
+    }
+}
+
+void handle_kvm_exit_io_in(struct vcpu *vcpu, char *port_data_ptr, uint64_t exit_count) {
+    // printfdebug("DELETE THIS LINE: reason is KVM_EXIT_IO_IN, port = %d\n", vcpu->kvm_run->io.port);
+    if (vcpu->kvm_run->io.port == 235) {
+        ((uint32_t *) port_data_ptr)[0] = exit_count;
+    } else {
+        printfdebug("UNEXPECTED KVM_EXIT_IO_IN vcpu->kvm_run->io.port = %d", vcpu->kvm_run->io.port);
+    }
+}
+
 int run_vm(struct vm *vm, struct vcpu *vcpu, size_t sz) {
     struct kvm_regs regs;
     uint64_t memval = 0;
@@ -207,34 +304,9 @@ int run_vm(struct vm *vm, struct vcpu *vcpu, size_t sz) {
                 char *port_data_ptr = p + vcpu->kvm_run->io.data_offset;
 
                 if (vcpu->kvm_run->io.direction == KVM_EXIT_IO_OUT) {
-                    // printfdebug("DELETE THIS LINE: reason is KVM_EXIT_IO_OUT, port = %d\n", vcpu->kvm_run->io.port);
-                    // printfdebug("Part A: (char *) vcpu->kvm_run = p = %p\n", p);
-                    // printfdebug("            p + vcpu->kvm_run->io.data_offset = %p\n", p + vcpu->kvm_run->io.data_offset);
-                    // printfdebug("            vcpu->kvm_run->io.data_offset = %llu\n", vcpu->kvm_run->io.data_offset);  // always remain 4096
-
-                    if (vcpu->kvm_run->io.port == 233) {
-                        // PORT NUMBER:   0xE9 = 233 = print uint32_t as char32_t
-                        // fwrite(p + vcpu->kvm_run->io.data_offset, vcpu->kvm_run->io.size, 1, stdout);
-                        fprintf(stdout, "%c", ((char32_t *) port_data_ptr)[0]);
-                        fflush(stdout);
-                    } else if (vcpu->kvm_run->io.port == 235) {
-                        // PORT NUMBER:   0xEB = 235 = print uint32_t as integer
-                        fprintf(stdout, "printVal value = %d\n", ((uint32_t *) port_data_ptr)[0]);
-                        fflush(stdout);
-                    } else if (vcpu->kvm_run->io.port == 237) {
-                        // PORT NUMBER:   0xED = 237 = print uint32_t as char* which is a null terminated string
-                        fprintf(stdout, "%s", vm->mem + ((uint32_t *) port_data_ptr)[0]);
-                        fflush(stdout);
-                    } else {
-                        printfdebug("UNEXPECTED KVM_EXIT_IO_OUT vcpu->kvm_run->io.port = %d", vcpu->kvm_run->io.port);
-                    }
+                    handle_kvm_exit_io_out(vm, vcpu, port_data_ptr);
                 } else if (vcpu->kvm_run->io.direction == KVM_EXIT_IO_IN) {
-                    // printfdebug("DELETE THIS LINE: reason is KVM_EXIT_IO_IN, port = %d\n", vcpu->kvm_run->io.port);
-                    if (vcpu->kvm_run->io.port == 235) {
-                        ((uint32_t *) port_data_ptr)[0] = exit_count;
-                    } else {
-                        printfdebug("UNEXPECTED KVM_EXIT_IO_IN vcpu->kvm_run->io.port = %d", vcpu->kvm_run->io.port);
-                    }
+                    handle_kvm_exit_io_in(vcpu, port_data_ptr, exit_count);
                 }
                 continue;
 
