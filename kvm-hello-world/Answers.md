@@ -1,21 +1,29 @@
 # Answers to Question asked in the Assignment
 
+[comment]: <> (NOTE: the virtual address space of host and hypervisor are one and the same thing)
 - Fact: virtual address space of the host is the same as virtual address space of the hypervisor process
-- Search for all statements having the words `DEBUG` and `NOTE` to get answers to the below questions.
-- **IMPORTANT** - write answers to TODO
-    * i.e. Help required
 - Primary Reference:
-    - https://en.wikibooks.org/wiki/X86_Assembly/X86_Architecture
-    - https://en.wikipedia.org/wiki/Control_register
     - https://lwn.net/Articles/658511/
-    - https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
+        - https://lwn.net/Articles/658512/
+    - https://github.com/david942j/kvm-kernel-example
+    - Hardware information
+        - https://en.wikibooks.org/wiki/X86_Assembly/X86_Architecture
+        - https://en.wikipedia.org/wiki/Control_register
+    - Network port information
+        - https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
+    - File I/O in C language
+        - https://stackoverflow.com/questions/1658476/c-fopen-vs-open
+        - https://www.geeksforgeeks.org/input-output-system-calls-c-create-open-close-read-write/
+        - https://www.ibm.com/support/knowledgecenter/en/SSLTBW_2.3.0/com.ibm.zos.v2r3.bpxbd00/rtcre.htm
+        - https://en.wikibooks.org/wiki/C_Programming/POSIX_Reference/fcntl.h
+        - https://man7.org/linux/man-pages/man2/open.2.html
+        - https://man7.org/linux/man-pages/man2/lseek.2.html
 
 ---
 
-[comment]: <> (NOTE: the virtual address space of host and hypervisor are one and the same thing)
-
 ### Part A
-What is the size of the guest memory (that the guest perceives as its physical memory) that is setup in the function vm_init? How and where in the hyprevisor code is this guest memory allocated from the host OS? At what virtual address is this memory mapped into the virtual address space of this simple hypervisor? (Note that the address returned by mmap is a host virtual address.)
+- [Commit cd636d0f15e7531d881221596cb11c530eed0f0b](https://github.com/fenilgmehta/CS695-Assignment-1/tree/cd636d0f15e7531d881221596cb11c530eed0f0b/)
+- Search for all statements having the words `DEBUG` and `NOTE` to get answers to the below questions.
 - Q1: What is the size of the guest memory (that the guest perceives as its physical memory) that is setup in the function vm_init? How and where in the hypervisor code is this guest memory allocated from the host OS? At what virtual address is this memory mapped into the virtual address space of this simple hypervisor? (Note that the address returned by mmap is a host virtual address.)
     - `0x200000 == 2097152 == pow(2,21) == 2 MB` bytes of memory is allocated as the RAM for the guest
     - Memory is allocated using the `mmap` function call. In the hypervisor code, Refer: `NOTE: Part A: Guest memory is allocated from the below line of the host OS`
@@ -67,9 +75,11 @@ What is the size of the guest memory (that the guest perceives as its physical m
 ---
 
 ### Part B
+- [Commit 84739f210164695e605701f861afa4c3c562641c](https://github.com/fenilgmehta/CS695-Assignment-1/tree/84739f210164695e605701f861afa4c3c562641c/)
 - Completely solved in the code ([kvm-hello-world.c](./kvm-hello-world.c), [guest.c](./guest.c))
 
 ---
 
 ### Part C
-- three
+- [Commit 1ad5ff9f24aad53748fbf6503128d972832eb7c9](https://github.com/fenilgmehta/CS695-Assignment-1/tree/1ad5ff9f24aad53748fbf6503128d972832eb7c9/)
+- Completely solved in the code ([kvm-hello-world.c](./kvm-hello-world.c), [guest.c](./guest.c))
