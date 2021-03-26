@@ -7,6 +7,6 @@
 
 ### References
 
-- https://linuxhint.com/install_kvm_virtualization_ubuntu/
+- https://help.ubuntu.com/community/KVM/Installation
 - https://github.com/dpw/kvm-hello-world
 
